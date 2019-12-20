@@ -1,0 +1,248 @@
+---
+title: "Finalprojectcode - 502"
+output: html_document
+Name: "Rohan Deshmukh"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Install Packages}
+if(!require(corrplot)){install.packages("corrplot")}
+if(!require(caret)){install.packages("caret")}
+if(!require(e1071)){install.packages("e1071")}
+if(!require(rpart)){install.packages("rpart")}
+if(!require(randomForest)){install.packages("randomForest")}
+if(!require(neuralnet)){install.packages("neuralnet")}
+if(!require(kableExtra)){install.packages("kableExtra")}
+if(!require(dplyr)){install.packages("dplyr")}
+```
+
+
+```{r Read data}
+# Reading the csv data file
+hapdat <- read.csv("/Users/rohandeshmukh/Desktop/2017.csv")
+str(hapdat)
+```
+
+
+```{r Format data}
+# Eliminating Whisker.high and Whisker.low columns
+hapdat <- hapdat[, -c(4,5)]
+
+# Renaming the column names for better readability
+colnames(hapdat) <- c("Country", "HappinessRank", "HappinessScore", "Economy", "Family", "LifeExpectancy", "Freedom", "Generosity",
+                          "Trust", "DystopiaResidual")
+str(hapdat)
+
+# Adding region variable to the dataset
+hapdat3 <- hapdat
+hapdat3$Continent <- NA
+hapdat3$Continent[which(hapdat3$Country %in% c("Israel", "United Arab Emirates", "Singapore", "Thailand", "Taiwan Province of China",
+                                   "Qatar", "Saudi Arabia", "Kuwait", "Bahrain", "Malaysia", "Uzbekistan", "Japan",
+                                   "South Korea", "Turkmenistan", "Kazakhstan", "Turkey", "Hong Kong S.A.R., China", "Philippines",
+                                   "Jordan", "China", "Pakistan", "Indonesia", "Azerbaijan", "Lebanon", "Vietnam",
+                                   "Tajikistan", "Bhutan", "Kyrgyzstan", "Nepal", "Mongolia", "Palestinian Territories",
+                                   "Iran", "Bangladesh", "Myanmar", "Iraq", "Sri Lanka", "Armenia", "India", "Georgia",
+                                   "Cambodia", "Afghanistan", "Yemen", "Syria"))] <- "Asia"
+hapdat3$Continent[which(hapdat3$Country %in% c("Norway", "Denmark", "Iceland", "Switzerland", "Finland",
+                                   "Netherlands", "Sweden", "Austria", "Ireland", "Germany",
+                                   "Belgium", "Luxembourg", "United Kingdom", "Czech Republic",
+                                   "Malta", "France", "Spain", "Slovakia", "Poland", "Italy",
+                                   "Russia", "Lithuania", "Latvia", "Moldova", "Romania",
+                                   "Slovenia", "North Cyprus", "Cyprus", "Estonia", "Belarus",
+                                   "Serbia", "Hungary", "Croatia", "Kosovo", "Montenegro",
+                                   "Greece", "Portugal", "Bosnia and Herzegovina", "Macedonia",
+                                   "Bulgaria", "Albania", "Ukraine"))] <- "Europe"
+hapdat3$Continent[which(hapdat3$Country %in% c("Canada", "Costa Rica", "United States", "Mexico",  
+                                   "Panama","Trinidad and Tobago", "El Salvador", "Belize", "Guatemala",
+                                   "Jamaica", "Nicaragua", "Dominican Republic", "Honduras",
+                                   "Haiti"))] <- "North America"
+hapdat3$Continent[which(hapdat3$Country %in% c("Chile", "Brazil", "Argentina", "Uruguay",
+                                   "Colombia", "Ecuador", "Bolivia", "Peru",
+                                   "Paraguay", "Venezuela"))] <- "South America"
+hapdat3$Continent[which(hapdat3$Country %in% c("New Zealand", "Australia"))] <- "Australia"
+hapdat3$Continent[which(is.na(hapdat3$Continent))] <- "Africa"
+
+# Changing Continent column to factor
+hapdat3$Continent <- as.factor(hapdat3$Continent)
+
+str(hapdat3)
+
+```
+
+
+```{r Data Exploration}
+# Finding the correlation between numerical columns
+corrdat <- cor(hapdat[, -1])
+corrplot(corrdat, method = "color")
+
+# Top ten happiest countries
+head(hapdat, 10)
+
+# Least ten happiest countries
+tail(hapdat, 10)
+
+# Correlation between variables with higher score (0.7+) with respect to happiness score
+corrplot(corrdat, method = "number")
+
+# Economy-Happiness score correlation plot
+ggplot(hapdat3, aes(x=hapdat3$Economy, y=hapdat3$HappinessScore))+ 
+  geom_point(aes(color = hapdat3$Continent)) +
+  geom_smooth(method="lm") + 
+  xlab("GDP per Capita") + 
+  ylab("Happiness Score") + 
+  labs(colour="Continent") +
+  ggtitle("All Regions: Happiness Score & Economy (2017)")
+
+# Family-Happiness score correlation plot
+ggplot(hapdat3, aes(x=hapdat3$Family, y=hapdat3$HappinessScore))+ 
+  geom_point(aes(color = hapdat3$Continent)) +
+  geom_smooth(method="lm") + 
+  xlab("Family") + 
+  ylab("Happiness Score") + 
+  labs(colour="Continent") +
+  ggtitle("All Regions: Happiness Score & Family (2017)")
+
+# Life expentency-Happiness score correlation plot
+ggplot(hapdat3, aes(x=hapdat3$LifeExpectancy, y=hapdat3$HappinessScore))+ 
+  geom_point(aes(color = hapdat3$Continent)) +
+  geom_smooth(method="lm") + 
+  xlab("Life Expentency") + 
+  ylab("Happiness Score") + 
+  labs(colour="Continent") +
+  ggtitle("All Regions: Happiness Score & Life expentency (2017)")
+```
+
+
+```{r Data prep}
+# Splitting the dataset into the Training set and Test set
+hapdat2 <- hapdat[3:10]
+set.seed(123)
+split_index <- sample(1:nrow(hapdat2), 0.7 * nrow(hapdat2))
+traindata <- hapdat2[split_index,]
+testdata <- hapdat2[-split_index,]
+```
+
+
+```{r Multiple Linear Regression}
+# Fitting Multiple Linear Regression to the Training set
+set.seed(16)
+lmmodel = lm(formula = HappinessScore ~ ., data = hapdat2)
+summary(lmmodel)
+
+# Predicting the Test data on the model
+predlm = predict(lmmodel, newdata = testdata)
+
+# Dataframe of predicted and actual scores
+predlmdf <- as.data.frame(cbind(predictedScore = predlm, actualScore = testdata$HappinessScore))
+
+# Plotting actual happiness score vs predicted score along with an abline
+lmggplot <- ggplot(predlmdf, aes(actualScore, predictedScore)) +
+  geom_point() + geom_abline() + theme_bw() +
+  xlab("Actual happiness score") +
+  ylab("Predicted happiness score") + 
+  ggtitle("Multiple Linear Regression") +
+  theme(plot.title = element_text(family = "Helvetica", face = "bold", size = (16)), 
+        axis.title = element_text(family = "Helvetica", face = "bold", size = (11)))
+lmggplot
+```
+
+
+```{r Support Vector Regression}
+# Fitting SVR to the dataset
+set.seed(16)
+svrmodel = svm(formula = HappinessScore ~., data = hapdat2, type = 'eps-regression', kernel = 'radial')
+summary(svrmodel)
+
+# Predicting the Test data on the model
+predsvr = predict(svrmodel,  newdata = testdata)
+
+# Dataframe of predicted and actual scores
+predsvrdf <- as.data.frame(cbind(predictedScore = predsvr, actualScore = testdata$HappinessScore))
+
+# Plotting actual happiness score vs predicted score along with an abline
+svrggplot <- ggplot(predsvrdf, aes(actualScore, predictedScore)) +
+  geom_point() + geom_abline() + theme_bw() +
+  xlab("Actual happiness score") +
+  ylab("Predicted happiness score") + 
+  ggtitle("Support Vector Regression") +
+  theme(plot.title = element_text(family = "Helvetica", face = "bold", size = (16)), 
+        axis.title = element_text(family = "Helvetica", face = "bold", size = (11)))
+svrggplot
+```
+
+
+```{r Decision Tree Regression}
+# Fitting Decision tree to the dataset
+set.seed(16)
+dtmodel = rpart(formula = HappinessScore ~ ., data = hapdat2, method = "anova", control = rpart.control(minsplit = 10, cp=0.001))
+summary(dtmodel)
+
+# Predicting the Test data on the model
+preddt = predict(dtmodel, newdata = testdata)
+
+# Dataframe of predicted and actual scores
+preddtdf <- as.data.frame(cbind(predictedScore = preddt, actualScore = testdata$HappinessScore))
+
+# Plotting actual happiness score vs predicted score along with an abline
+dtggplot <- ggplot(preddtdf, aes(actualScore, predictedScore)) +
+  geom_point() + geom_abline() + theme_bw() +
+  xlab("Actual happiness score") +
+  ylab("Predicted happiness score") + 
+  ggtitle("Decision Tree") +
+  theme(plot.title = element_text(family = "Helvetica", face = "bold", size = (16)), 
+        axis.title = element_text(family = "Helvetica", face = "bold", size = (11)))
+dtggplot
+```
+
+
+```{r Random Forest Regression}
+# Fitting Random forest to the dataset
+set.seed(16)
+rfmodel = randomForest(x = traindata[, -1], y = traindata$HappinessScore, ntree = 500, mtry = 3, importance=T)
+summary(rfmodel)
+
+# Predicting the Test data on the model
+predrf = predict(rfmodel, newdata = testdata)
+
+# Dataframe of predicted and actual scores
+predrfdf <- as.data.frame(cbind(predictedScore = predrf, actualScore = testdata$HappinessScore))
+
+# Plotting actual happiness score vs predicted score along with an abline
+rfggplot <- ggplot(predrfdf, aes(actualScore, predictedScore)) +
+  geom_point() + geom_abline() + theme_bw() +
+  xlab("Actual happiness score") +
+  ylab("Predicted happiness score") + 
+  ggtitle("Random Forest") +
+  theme(plot.title = element_text(family = "Helvetica", face = "bold", size = (16)), 
+        axis.title = element_text(family = "Helvetica", face = "bold", size = (11)))
+rfggplot
+```
+
+
+```{r Neural Net}
+# Fitting Random forest to the dataset
+set.seed(16)
+nnmodel <- neuralnet(HappinessScore ~ Economy + Family + LifeExpectancy + Freedom + Generosity + Trust + DystopiaResidual,
+                data=traindata,hidden=10,linear.output=TRUE)
+plot(nnmodel)
+
+# Predicting the Test data on the model
+prednn <- compute(nnmodel,testdata[,2:8])
+
+# Dataframe of predicted and actual scores
+prednndf <- as.data.frame(cbind(predictedScore = prednn$net.result, actualScore = testdata$HappinessScore))
+
+# Plotting actual happiness score vs predicted score along with an abline
+nnggplot <- ggplot(prednndf, aes(actualScore, V1)) +
+  geom_point() + geom_abline() + theme_bw() +
+  xlab("Actual happiness score") +
+  ylab("Predicted happiness score") + 
+  ggtitle("NeuralNet") +
+  theme(plot.title = element_text(family = "Helvetica", face = "bold", size = (16)), 
+        axis.title = element_text(family = "Helvetica", face = "bold", size = (11)))
+nnggplot
+```
